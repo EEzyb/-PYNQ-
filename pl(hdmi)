@@ -1,0 +1,107 @@
+module rgb_display(
+ input pixel_clk, //像素时钟
+ input sys_rst_n, //复位信号
+4 5
+input [10:0] pixel_xpos, //像素点横坐标
+6 input [10:0] pixel_ypos, //像素点纵坐标
+7 output reg [23:0] pixel_data //像素点数据
+8 );
+9
+10 //parameter define
+11 parameter H_DISP = 11'd1280; //分辨率--行
+12 parameter V_DISP = 11'd720; //分辨率--列
+13
+14 localparam SIDE_W = 11'd40; //屏幕边框宽度
+15 localparam BLOCK_W = 11'd40; //方块宽度
+16 localparam BLUE = 24'b00000000_00000000_11111111; //屏幕边框颜色 蓝色
+17 localparam WHITE = 24'b11111111_11111111_11111111; //背景颜色 白色
+18 localparam BLACK = 24'b00000000_00000000_00000000; //方块颜色 黑色
+19
+20 //reg define
+21 reg [10:0] block_x = SIDE_W ; //方块左上角横坐标
+22 reg [10:0] block_y = SIDE_W ; //方块左上角纵坐标
+23 reg [21:0] div_cnt; //时钟分频计数器
+24 reg h_direct; //方块水平移动方向， 1：右移， 0：左移
+25 reg v_direct; //方块竖直移动方向， 1：向下， 0：向上
+26
+27 //wire define
+28 wire move_en; //方块移动使能信号，频率为 100hz
+33 assign move_en = (div_cnt == 22'd734214) ? 1'b1 : 1'b0;
+34
+35 //通过对像素时钟计数，实现时钟分频
+36 always @(posedge pixel_clk ) begin
+37 if (!sys_rst_n)
+38 div_cnt <= 22'd0;
+39 else begin
+40 if(div_cnt < 22'd734214)
+41 div_cnt <= div_cnt + 1'b1;
+42 else
+43 div_cnt <= 22'd0; //计数达 10ms 后清零
+44 end
+45 end
+
+48 always @(posedge pixel_clk ) begin
+49 if (!sys_rst_n) begin
+50 h_direct <= 1'b1; //方块初始水平向右移动
+51 v_direct <= 1'b1; //方块初始竖直向下移动
+52 end
+53 else begin
+54 if(block_x == SIDE_W - 1'b1) //到达左边界时，水平向右
+55 h_direct <= 1'b1;
+56 else //到达右边界时，水平向左
+57 if(block_x == H_DISP - SIDE_W - BLOCK_W)
+58 h_direct <= 1'b0;
+59 else
+60 h_direct <= h_direct;
+61
+62 if(block_y == SIDE_W - 1'b1) //到达上边界时，竖直向下
+63 v_direct <= 1'b1;
+64 else //到达下边界时，竖直向上
+65 if(block_y == V_DISP - SIDE_W - BLOCK_W)
+66 v_direct <= 1'b0;
+67 else
+68 v_direct <= v_direct;
+69 end
+70 end
+
+
+72 //根据方块移动方向，改变其纵横坐标
+73 always @(posedge pixel_clk ) begin
+74 if (!sys_rst_n) begin
+75 block_x <= SIDE_W; //方块初始位置横坐标
+76 block_y <= SIDE_W; //方块初始位置纵坐标
+77 end
+78 else if(move_en) begin
+79 if(h_direct)
+80 block_x <= block_x + 1'b1; //方块向右移动
+81 else
+82 block_x <= block_x - 1'b1; //方块向左移动
+83
+84 if(v_direct)
+85 block_y <= block_y + 1'b1; //方块向下移动
+86 else
+87 block_y <= block_y - 1'b1; //方块向上移动
+88 end
+89 else begin
+90 block_x <= block_x;
+91 block_y <= block_y;
+92 end
+93 end
+
+96 always @(posedge pixel_clk ) begin
+97 if (!sys_rst_n)
+98 pixel_data <= BLACK;
+99 else begin
+100 if( (pixel_xpos < SIDE_W) || (pixel_xpos >= H_DISP - SIDE_W)
+101 || (pixel_ypos < SIDE_W) || (pixel_ypos >= V_DISP - SIDE_W))
+102 pixel_data <= BLUE; 
+103 else
+104 if( (pixel_xpos >= block_x) && (pixel_xpos < block_x + BLOCK_W)
+105 && (pixel_ypos >= block_y) && (pixel_ypos < block_y + BLOCK_W))
+106 pixel_data <= BLACK; 
+107 else
+108 pixel_data <= WHITE; 
+109 end
+110 end
+111
+112 endmodule
